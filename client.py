@@ -37,7 +37,7 @@ def main(host, port, name, format_name, remove_presentation):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Application/presentation layer demo client")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--port", type=int, default=5001)
     parser.add_argument("--name", default="Student")
     parser.add_argument("--format", choices=FORMATS, default="json")
     parser.add_argument(
