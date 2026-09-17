@@ -15,7 +15,7 @@ python3 server.py --host 0.0.0.0 --port 5001
 On another device on the same network, run:
 
 ```bash
-python3 client.py --host 10.191.195.149  --port 5001 --name "Koce"
+python3 client.py --host 10.10.32.241  --port 5001 --name "Koce"
 ```
 
 The server prints each connecting device's address and explicitly reports that authentication was not performed. This is for a controlled classroom network only; do not expose this server to the public internet.
@@ -75,3 +75,5 @@ That is Python's `repr()` format. It uses single quotes, so it is not valid JSON
 - **Application layer:** `greeting` and `greeting_reply` define the meaning and behavior of the messages.
 
 The `--remove-presentation` option demonstrates the boundary: the application still creates a greeting, and TCP still connects, but the receiver cannot interpret the bytes. In a real internet deployment, replace `127.0.0.1` with the server device's reachable IP address, open the selected TCP port in its firewall, and consider TLS for encryption and authentication.
+
+ipconfig getifaddr en0
