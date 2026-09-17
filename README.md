@@ -15,7 +15,7 @@ python3 server.py --host 0.0.0.0 --port 5001
 On another device on the same network, run:
 
 ```bash
-python3 client.py --host IP-Address  --port 5001 --name "Koce"
+python3 client.py --host 10.191.195.149  --port 5001 --name "Koce"
 ```
 
 The server prints each connecting device's address and explicitly reports that authentication was not performed. This is for a controlled classroom network only; do not expose this server to the public internet.
