@@ -11,24 +11,29 @@ const net = require("net");
 const util = require("util");
 
 function parseArgs(argv) {
-    const options = { host: "127.0.0.1", port: 5001, name: "Student", broken: false };
-    for (let i = 0; i < argv.length; i++) {
-        switch (argv[i]) {
-            case "--host":
-                options.host = argv[++i];
-                break;
-            case "--port":
-                options.port = parseInt(argv[++i], 10);
-                break;
-            case "--name":
-                options.name = argv[++i];
-                break;
-            case "--broken":
-                options.broken = true;
-                break;
-        }
+  const options = {
+    host: "127.0.0.1",
+    port: 5001,
+    name: "Student",
+    broken: false,
+  };
+  for (let i = 0; i < argv.length; i++) {
+    switch (argv[i]) {
+      case "--host":
+        options.host = argv[++i];
+        break;
+      case "--port":
+        options.port = parseInt(argv[++i], 10);
+        break;
+      case "--name":
+        options.name = argv[++i];
+        break;
+      case "--broken":
+        options.broken = true;
+        break;
     }
-    return options;
+  }
+  return options;
 }
 
 const { host, port, name, broken } = parseArgs(process.argv.slice(2));
@@ -37,36 +42,36 @@ const greeting = { type: "greeting", name };
 
 let wireMessage;
 if (broken) {
-    // Deliberately skip JSON. This is Node's internal object
-    // representation, not the shared wire format the server expects.
-    const raw = util.inspect(greeting);
-    console.log("BROKEN MODE: presentation layer removed");
-    console.log("Sending raw Node representation:", raw);
-    wireMessage = raw + "\n";
+  // Deliberately skip JSON. This is Node's internal object
+  // representation, not the shared wire format the server expects.
+  const raw = util.inspect(greeting);
+  console.log("BROKEN MODE: presentation layer removed");
+  console.log("Sending raw Node representation:", raw);
+  wireMessage = raw + "\n";
 } else {
-    // Presentation layer: application data -> agreed JSON wire format.
-    const json = JSON.stringify(greeting);
-    console.log("NORMAL MODE: JSON presentation layer enabled");
-    console.log("Sending JSON:", json);
-    wireMessage = json + "\n";
+  // Presentation layer: application data -> agreed JSON wire format.
+  const json = JSON.stringify(greeting);
+  console.log("NORMAL MODE: JSON presentation layer enabled");
+  console.log("Sending JSON:", json);
+  wireMessage = json + "\n";
 }
 
 const socket = net.createConnection({ host, port }, () => {
-    socket.write(wireMessage);
+  socket.write(wireMessage);
 });
 
 let buffer = "";
 socket.on("data", (chunk) => {
-    buffer += chunk.toString("utf8");
-    const newlineIndex = buffer.indexOf("\n");
-    if (newlineIndex === -1) {
-        return;
-    }
-    const replyLine = buffer.slice(0, newlineIndex);
-    console.log("Raw server reply:", replyLine);
-    socket.end();
+  buffer += chunk.toString("utf8");
+  const newlineIndex = buffer.indexOf("\n");
+  if (newlineIndex === -1) {
+    return;
+  }
+  const replyLine = buffer.slice(0, newlineIndex);
+  console.log("Raw server reply:", replyLine);
+  socket.end();
 });
 
 socket.on("error", (error) => {
-    console.error("Connection error:", error.message);
+  console.error("Connection error:", error.message);
 });
