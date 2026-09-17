@@ -1,9 +1,10 @@
 import requests
 from threading import Thread
 
-url = "10.191.195.149:5001"
+URL = "URL:PORT"
+ATTEMPTS = 10
 
 if __name__ == "__main__":
-    while True:
-        thread = Thread(target=requests.get, args=(url,))
+    for i in range(ATTEMPTS):
+        thread = Thread(target=requests.get, args=(URL,))
         thread.start()
