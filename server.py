@@ -5,9 +5,11 @@ import socket
 import threading
 
 from protocol import FORMATS, decode, encode
+from ip import get_local_ip
 
-HOST = "0.0.0.0"
+HOST = get_local_ip()
 PORT = 5001
+
 
 def application_handle(message):
     """Application layer: decide what the message means."""
@@ -62,8 +64,8 @@ def serve(host, port, format_name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Application/presentation layer demo server")
-    parser.add_argument("--host", default=HOST)
-    parser.add_argument("--port", type=int, default=PORT)
+    parser.add_argument("--host", default=HOST, help="Leave empty for current local ip")
+    parser.add_argument("--port", type=int, default=PORT, help="Leave empty for 5001")
     parser.add_argument("--format", choices=FORMATS, default="json")
     arguments = parser.parse_args()
     print("Presentation format:", arguments.format)
