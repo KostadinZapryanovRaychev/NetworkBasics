@@ -1,14 +1,13 @@
 // Tiny TCP client showing why a shared presentation format is needed.
 //
 // The Python server (server.py) only understands the wire formats defined
-// in protocol.py (JSON, XML, CSV, pickle). Node's own util.inspect()
-// representation of an object is none of those, so sending it "as is"
+// in protocol.py (JSON, XML, CSV, pickle). A plain JavaScript object turns
+// into "[object Object]" when sent without serializing, so sending it "as is"
 // demonstrates the same point as client.py's --broken flag, the C# client's
 // --broken flag, and the Rust client's --broken flag, but from Node this
-// time. No dependencies: uses only Node's built-in net and util modules.
+// time. No dependencies: uses only Node's built-in net module.
 
 const net = require("net");
-const util = require("util");
 
 function parseArgs(argv) {
   const options = {
@@ -42,12 +41,13 @@ const greeting = { type: "greeting", name };
 
 let wireMessage;
 if (broken) {
-  // Deliberately skip JSON. This is Node's internal object
-  // representation, not the shared wire format the server expects.
-  const raw = util.inspect(greeting);
+  // Deliberately skip JSON and hand the plain object to the socket layer.
+  // A socket only carries bytes/strings, so the object gets coerced to
+  // its default string form: "[object Object]" (the classic JS mistake).
   console.log("BROKEN MODE: presentation layer removed");
-  console.log("Sending raw Node representation:", raw);
-  wireMessage = raw + "\n";
+  console.log("Sending plain JavaScript object:", greeting);
+  wireMessage = greeting + "\n";
+  console.log("What actually goes on the wire:", JSON.stringify(wireMessage));
 } else {
   // Presentation layer: application data -> agreed JSON wire format.
   const json = JSON.stringify(greeting);
