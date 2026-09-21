@@ -8,3 +8,4 @@ csharp-client/obj/
 # Python
 __pycache__/
 *.pyc
+.idea
