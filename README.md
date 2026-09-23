@@ -27,19 +27,18 @@ python3 server.py
 python3 client.py --name Alice
 ```
 
-The default format is JSON. To use another presentation format, start both sides with the same choice:
+The default format is JSON. The client sends a `Content-Type` header before the body, and the server reads that header to know which format is coming, so the server does not need a matching `--format` flag or a restart. Leave the same server running and switch formats on the client alone:
 
 ```bash
-python3 server.py --format xml
 python3 client.py --format xml --name Alice
+python3 client.py --format csv --name Alice
 ```
 
-You can also use `--format csv`. XML and CSV are presentation formats too; the application message remains the same greeting.
+XML and CSV are presentation formats too; the application message remains the same greeting.
 
 For a Python-only experiment, use `--format pickle`:
 
 ```bash
-python3 server.py --format pickle
 python3 client.py --format pickle --name Alice
 ```
 
@@ -60,13 +59,13 @@ Leave the server running and execute:
 python3 client.py --name Alice --remove-presentation
 ```
 
-The client now sends this instead of JSON:
+The client now sends this instead of a `Content-Type` header and a JSON body:
 
 ```text
 {'type': 'greeting', 'name': 'Alice'}
 ```
 
-That is Python's `repr()` format. It uses single quotes, so it is not valid JSON. The server cannot decode it, reports `PROTOCOL FAILURE`, and returns a `protocol_error` message. The application layer never gets a usable message. The same failure happens if the server and client choose different formats.
+That is Python's `repr()` format, with no header in front of it. The server's first line of reading is always meant to be a header, so it sees this text where it expected `Content-Type: ...`, reports `PROTOCOL FAILURE`, and returns a `protocol_error` message. The application layer never gets a usable message. Because the server now reads the format from the header instead of a flag you set by hand, the server and client no longer need to be started with the same `--format`; only a missing or unrecognized header causes this failure.
 
 ## Find the server's IP address
 
