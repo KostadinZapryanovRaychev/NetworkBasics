@@ -1,10 +1,11 @@
 // Tiny TCP client showing why a shared presentation format is needed.
 //
-// The Python server (server.py) only understands the wire formats defined
-// in protocol.py (JSON, XML, CSV, pickle). Go's default %+v struct dump is
-// none of those - it looks close to JSON but still fails to parse as it,
-// which makes it a good "near miss" example alongside the other clients'
-// --broken flag. No dependencies: standard library only.
+// The Python server (server.py) reads a Content-Type header line before the
+// body, so the format can change per request without restarting the server.
+// Go's default %+v struct dump is none of the formats it understands, and
+// skips the header entirely, so sending it "as is" demonstrates the same
+// point as client.py's --remove-presentation flag. No dependencies:
+// standard library only.
 
 package main
 
@@ -13,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 )
 
 type Greeting struct {
@@ -20,29 +22,51 @@ type Greeting struct {
 	Name string
 }
 
+func encodeBody(format string, greeting Greeting) (string, error) {
+	switch format {
+	case "json":
+		return fmt.Sprintf(`{"type": "%s", "name": "%s"}`, greeting.Type, greeting.Name), nil
+	case "urlencoded":
+		values := url.Values{}
+		values.Set("type", greeting.Type)
+		values.Set("name", greeting.Name)
+		return values.Encode(), nil
+	default:
+		return "", fmt.Errorf("unsupported format: %s", format)
+	}
+}
+
 func main() {
 	host := flag.String("host", "127.0.0.1", "server host")
 	port := flag.Int("port", 5001, "server port")
 	name := flag.String("name", "Student", "greeting name")
-	broken := flag.Bool("broken", false, "send Go's native struct dump instead of JSON")
+	format := flag.String("format", "json", "presentation format: json or urlencoded")
+	broken := flag.Bool("broken", false, "send Go's native struct dump instead of a header and body")
 	flag.Parse()
 
 	greeting := Greeting{Type: "greeting", Name: *name}
 
 	var wireMessage string
 	if *broken {
-		// Deliberately skip JSON. This is Go's internal struct
-		// representation, not the shared wire format the server expects.
+		// Deliberately skip both the header and serialization. This is Go's
+		// internal struct representation, not the shared wire format the
+		// server expects, and there is no Content-Type line either.
 		raw := fmt.Sprintf("%+v", greeting)
 		fmt.Println("BROKEN MODE: presentation layer removed")
 		fmt.Println("Sending raw Go representation:", raw)
 		wireMessage = raw + "\n"
 	} else {
-		// Presentation layer: application data -> agreed JSON wire format.
-		json := fmt.Sprintf(`{"type": "%s", "name": "%s"}`, greeting.Type, greeting.Name)
-		fmt.Println("NORMAL MODE: JSON presentation layer enabled")
-		fmt.Println("Sending JSON:", json)
-		wireMessage = json + "\n"
+		// Presentation layer: application data -> agreed wire format, with
+		// a Content-Type header so the server knows which one without
+		// being told in advance.
+		body, err := encodeBody(*format, greeting)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println("NORMAL MODE:", *format, "presentation layer enabled")
+		fmt.Println("Sending body:", body)
+		wireMessage = "Content-Type: " + *format + "\n" + body + "\n"
 	}
 
 	address := fmt.Sprintf("%s:%d", *host, *port)
@@ -60,10 +84,16 @@ func main() {
 	}
 
 	reader := bufio.NewReader(conn)
-	replyLine, err := reader.ReadString('\n')
-	if err != nil && replyLine == "" {
+	replyHeader, err := reader.ReadString('\n')
+	if err != nil && replyHeader == "" {
 		fmt.Println("No reply from server.")
 		return
 	}
-	fmt.Println("Raw server reply:", replyLine[:len(replyLine)-1])
+	fmt.Println("Reply header:", replyHeader[:len(replyHeader)-1])
+
+	replyBody, err := reader.ReadString('\n')
+	if err == nil {
+		replyBody = replyBody[:len(replyBody)-1]
+	}
+	fmt.Println("Reply body:", replyBody)
 }

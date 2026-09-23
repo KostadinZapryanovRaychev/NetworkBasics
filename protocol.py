@@ -4,9 +4,10 @@ import csv
 import io
 import json
 import pickle
+import urllib.parse
 import xml.etree.ElementTree as ET
 
-FORMATS = ("json", "xml", "csv", "pickle")
+FORMATS = ("json", "xml", "csv", "pickle", "urlencoded")
 
 
 def encode(message, format_name):
@@ -17,6 +18,9 @@ def encode(message, format_name):
     if format_name == "pickle":
         # Educational Python-only format; never load untrusted pickle data.
         return pickle.dumps(message) + b"\n"
+    elif format_name == "urlencoded":
+        # Same content type HTML forms use: application/x-www-form-urlencoded.
+        text = urllib.parse.urlencode(message)
     elif format_name == "xml":
         root = ET.Element("message")
         for key, value in message.items():
@@ -50,4 +54,7 @@ def decode(line, format_name):
         if len(rows) != 1:
             raise ValueError("CSV message must contain one data row")
         return rows[0]
+    if format_name == "urlencoded":
+        pairs = urllib.parse.parse_qsl(text, strict_parsing=True)
+        return dict(pairs)
     raise ValueError("Unsupported format: {}".format(format_name))
