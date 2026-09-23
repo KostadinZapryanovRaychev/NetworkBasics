@@ -50,11 +50,15 @@ def handle_client(connection, address):
             print("Presentation decoded:", message)
             reply = application_handle(message)
         except (UnicodeDecodeError, ValueError, AttributeError) as error:
+            # Report a protocol-level problem, not the parser's internal
+            # diagnostics (e.g. "line 1 column 1 (char 0)"), which exposes
+            # server implementation details and means nothing to a client
+            # that isn't Python.
             reply = {
                 "type": "protocol_error",
-                "message": "Presentation layer could not decode the message: {}".format(error),
+                "message": "Body does not match declared Content-Type: {}".format(format_name),
             }
-            print("PROTOCOL FAILURE:", reply["message"])
+            print("PROTOCOL FAILURE:", reply["message"], "-", error)
 
         header = "Content-Type: {}\n".format(format_name).encode("utf-8")
         connection.sendall(header + encode(reply, format_name))
