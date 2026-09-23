@@ -23,29 +23,45 @@ def application_handle(message):
     }
 
 
-def handle_client(connection, address, format_name):
+def handle_client(connection, address):
     with connection:
         print("Connected without authentication:", address)
-        received = connection.makefile("rb").readline()
-        if not received:
+        stream = connection.makefile("rb")
+        header_line = stream.readline().decode("utf-8").strip()
+        if not header_line:
             return
 
+        # Header: the client tells us what format is coming next, so the
+        # server no longer needs to be started with a matching --format.
+        name, _, format_name = header_line.partition(":")
+        format_name = format_name.strip()
+        if name.strip().lower() != "content-type" or format_name not in FORMATS:
+            reply = {
+                "type": "protocol_error",
+                "message": "Missing or unknown Content-Type header: {!r}".format(header_line),
+            }
+            print("PROTOCOL FAILURE:", reply["message"])
+            connection.sendall(b"Content-Type: json\n" + encode(reply, "json"))
+            return
+
+        received = stream.readline()
         try:
             message = decode(received, format_name)
             print("Presentation decoded:", message)
             reply = application_handle(message)
-            connection.sendall(encode(reply, format_name))
-            print("Application reply sent to", address, ":", reply)
         except (UnicodeDecodeError, ValueError, AttributeError) as error:
-            error_message = {
+            reply = {
                 "type": "protocol_error",
                 "message": "Presentation layer could not decode the message: {}".format(error),
             }
-            print("PROTOCOL FAILURE:", error_message["message"])
-            connection.sendall(encode(error_message, format_name))
+            print("PROTOCOL FAILURE:", reply["message"])
+
+        header = "Content-Type: {}\n".format(format_name).encode("utf-8")
+        connection.sendall(header + encode(reply, format_name))
+        print("Application reply sent to", address, ":", reply)
 
 
-def serve(host, port, format_name):
+def serve(host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((host, port))
@@ -57,7 +73,7 @@ def serve(host, port, format_name):
             connection, address = server_socket.accept()
             threading.Thread(
                 target=handle_client,
-                args=(connection, address, format_name),
+                args=(connection, address),
                 daemon=True,
             ).start()
 
@@ -66,7 +82,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Application/presentation layer demo server")
     parser.add_argument("--host", default=HOST, help="Leave empty for current local ip")
     parser.add_argument("--port", type=int, default=PORT, help="Leave empty for 5001")
-    parser.add_argument("--format", choices=FORMATS, default="json")
     arguments = parser.parse_args()
-    print("Presentation format:", arguments.format)
-    serve(arguments.host, arguments.port, arguments.format)
+    print("Format is read from each client's Content-Type header")
+    serve(arguments.host, arguments.port)

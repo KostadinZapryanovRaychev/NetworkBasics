@@ -20,15 +20,22 @@ def main(host, port, name, format_name, remove_presentation):
         wire_message = (repr(message) + "\n").encode("utf-8")
         print("BROKEN MODE: presentation layer removed")
     else:
-        wire_message = encode(message, format_name)
+        body = encode(message, format_name)
+        # Header: the client states what it sent, instead of both sides
+        # having to be started with the same --format by hand.
+        header = "Content-Type: {}\n".format(format_name).encode("utf-8")
+        wire_message = header + body
         print("NORMAL MODE: {} presentation layer enabled".format(format_name.upper()))
 
     with socket.create_connection((host, port)) as connection:
         connection.sendall(wire_message)
-        reply_line = connection.makefile("rb").readline()
+        stream = connection.makefile("rb")
+        reply_header = stream.readline().decode("utf-8").strip()
+        reply_line = stream.readline()
 
+    reply_format = reply_header.split(":", 1)[1].strip() if ":" in reply_header else format_name
     try:
-        reply = decode(reply_line, format_name)
+        reply = decode(reply_line, reply_format)
         print("Server reply:", reply)
     except (UnicodeDecodeError, ValueError) as error:
         print("CLIENT PRESENTATION FAILURE:", error)
