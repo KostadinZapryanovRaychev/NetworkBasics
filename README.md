@@ -71,11 +71,11 @@ That is Python's `repr()` format, with no header in front of it. The server's fi
 
 Run one of these **on the server device** (the one running `server.py`) and use the result as `--host` in the clients. Look for a private address such as `192.168.x.x`, `10.x.x.x` or `172.16.x.x`-`172.31.x.x`. A public address will not work on the classroom network.
 
-| OS | Command | What to read |
-|---|---|---|
-| macOS | `ipconfig getifaddr en0` | Prints the IP directly. Try `en1` if `en0` prints nothing. |
-| Windows | `ipconfig` | The `IPv4 Address` under your Wi-Fi or Ethernet adapter. |
-| Linux | `hostname -I` | The first address printed. `ip -4 addr` shows more detail. |
+| OS      | Command                  | What to read                                               |
+| ------- | ------------------------ | ---------------------------------------------------------- |
+| macOS   | `ipconfig getifaddr en0` | Prints the IP directly. Try `en1` if `en0` prints nothing. |
+| Windows | `ipconfig`               | The `IPv4 Address` under your Wi-Fi or Ethernet adapter.   |
+| Linux   | `hostname -I`            | The first address printed. `ip -4 addr` shows more detail. |
 
 On Windows, Python is usually started with `python` or `py` instead of `python3`. If clients cannot connect, allow Python through the server device's firewall. In the examples below, `10.10.32.241` stands for that IP.
 
@@ -89,14 +89,14 @@ python3 server.py --host 0.0.0.0 --port 5001
 
 Then run a client from the project folder (`NetworkBasics/`). Without `--broken` each client serializes the greeting to JSON and the server replies `Hello, Koce!`. With `--broken` the server replies `protocol_error`.
 
-| Language | Needs | Normal | Broken (`--broken`) sends |
-|---|---|---|---|
-| Python | Python 3 | `python3 client.py --host 10.10.32.241 --port 5001 --name "Koce"` | `{'type': 'greeting', 'name': 'Koce'}` (uses `--remove-presentation` instead) |
-| Node.js | Node.js | `node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce"` | `[object Object]`, the plain object turned into text |
-| Java | JDK 11+ | `java java-client/Client.java --host 10.10.32.241 --port 5001 --name "Koce"` | `Client$Greeting@5e5d171f`, the default `toString()` |
-| Go | Go | `cd go-client && go run main.go --host 10.10.32.241 --port 5001 --name "Koce"` | `{Type:greeting Name:Koce}` |
-| C# | .NET SDK | `cd csharp-client && dotnet run -- --host 10.10.32.241 --port 5001 --name "Koce"` | `Greeting { Type = greeting, Name = Koce }` |
-| Rust | Rust (cargo) | `cd rust-client && cargo run -- --host 10.10.32.241 --port 5001 --name "Koce"` | `Greeting { msg_type: "greeting", name: "Koce" }` |
+| Language | Needs        | Normal                                                                            | Broken (`--broken`) sends                                                     |
+| -------- | ------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Python   | Python 3     | `python3 client.py --host 10.10.32.241 --port 5001 --name "Koce"`                 | `{'type': 'greeting', 'name': 'Koce'}` (uses `--remove-presentation` instead) |
+| Node.js  | Node.js      | `node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce"`        | `[object Object]`, the plain object turned into text                          |
+| Java     | JDK 11+      | `java java-client/Client.java --host 10.10.32.241 --port 5001 --name "Koce"`      | `Client$Greeting@5e5d171f`, the default `toString()`                          |
+| Go       | Go           | `cd go-client && go run main.go --host 10.10.32.241 --port 5001 --name "Koce"`    | `{Type:greeting Name:Koce}`                                                   |
+| C#       | .NET SDK     | `cd csharp-client && dotnet run -- --host 10.10.32.241 --port 5001 --name "Koce"` | `Greeting { Type = greeting, Name = Koce }`                                   |
+| Rust     | Rust (cargo) | `cd rust-client && cargo run -- --host 10.10.32.241 --port 5001 --name "Koce"`    | `Greeting { msg_type: "greeting", name: "Koce" }`                             |
 
 To see the failure, add `--broken` to the same command, for example:
 
