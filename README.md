@@ -81,30 +81,53 @@ On Windows, Python is usually started with `python` or `py` instead of `python3`
 
 ## Clients in other languages
 
-Every client below does the same thing as `client.py`: it sends a greeting to the Python server on port 5001, and it has a `--broken` option that skips serialization. Start the server first on the server device:
+Every client below does the same thing as `client.py`: it sends a `Content-Type` header and a greeting body to the Python server on port 5001, and takes `--format json` (default) or `--format urlencoded`. Each also has a `--broken` option that skips both the header and serialization. Start the server first on the server device:
 
 ```bash
 python3 server.py --host 0.0.0.0 --port 5001
 ```
 
-Then run a client from the project folder (`NetworkBasics/`). Without `--broken` each client serializes the greeting to JSON and the server replies `Hello, Koce!`. With `--broken` the server replies `protocol_error`.
+Then run a client from the project folder (`NetworkBasics/`), replacing `10.10.32.241` with the server's IP.
 
-| Language | Needs        | Normal                                                                            | Broken (`--broken`) sends                                                     |
-| -------- | ------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Python   | Python 3     | `python3 client.py --host 10.10.32.241 --port 5001 --name "Koce"`                 | `{'type': 'greeting', 'name': 'Koce'}` (uses `--remove-presentation` instead) |
-| Node.js  | Node.js      | `node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce"`        | `[object Object]`, the plain object turned into text                          |
-| Java     | JDK 11+      | `java java-client/Client.java --host 10.10.32.241 --port 5001 --name "Koce"`      | `Client$Greeting@5e5d171f`, the default `toString()`                          |
-| Go       | Go           | `cd go-client && go run main.go --host 10.10.32.241 --port 5001 --name "Koce"`    | `{Type:greeting Name:Koce}`                                                   |
-| C#       | .NET SDK     | `cd csharp-client && dotnet run -- --host 10.10.32.241 --port 5001 --name "Koce"` | `Greeting { Type = greeting, Name = Koce }`                                   |
-| Rust     | Rust (cargo) | `cd rust-client && cargo run -- --host 10.10.32.241 --port 5001 --name "Koce"`    | `Greeting { msg_type: "greeting", name: "Koce" }`                             |
+| Language | Needs        | Run from            | Command |
+| -------- | ------------ | -------------------- | --- |
+| Python   | Python 3     | project root          | `python3 client.py --host 10.10.32.241 --port 5001 --name "Koce"` |
+| Node.js  | Node.js      | project root          | `node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce"` |
+| Java     | JDK 11+      | project root          | `java java-client/Client.java --host 10.10.32.241 --port 5001 --name "Koce"` |
+| Go       | Go           | `go-client/`          | `go run main.go --host 10.10.32.241 --port 5001 --name "Koce"` |
+| C#       | .NET SDK     | `csharp-client/`      | `dotnet run -- --host 10.10.32.241 --port 5001 --name "Koce"` |
+| Rust     | Rust (cargo) | `rust-client/`        | `cargo run -- --host 10.10.32.241 --port 5001 --name "Koce"` |
 
-To see the failure, add `--broken` to the same command, for example:
+Expected result for any of them: a `Content-Type: json` reply header, then a body such as `{"type": "greeting_reply", "message": "Hello, Koce!"}`.
+
+Add `--format urlencoded` to send `type=greeting&name=Koce` instead, on the same running server, no restart needed:
+
+```bash
+node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce" --format urlencoded
+java java-client/Client.java --host 10.10.32.241 --port 5001 --name "Koce" --format urlencoded
+(cd go-client && go run main.go --host 10.10.32.241 --port 5001 --name "Koce" --format urlencoded)
+(cd csharp-client && dotnet run -- --host 10.10.32.241 --port 5001 --name "Koce" --format urlencoded)
+(cd rust-client && cargo run -- --host 10.10.32.241 --port 5001 --name "Koce" --format urlencoded)
+```
+
+Add `--broken` to see the failure. Each language sends its own native representation instead of a header and body:
+
+| Language | `--broken` sends |
+| -------- | --- |
+| Python   | `{'type': 'greeting', 'name': 'Koce'}` (uses `--remove-presentation` instead of `--broken`) |
+| Node.js  | `[object Object]`, the plain object turned into text |
+| Java     | `Client$Greeting@5e5d171f`, the default `toString()` |
+| Go       | `{Type:greeting Name:Koce}` |
+| C#       | `Greeting { Type = greeting, Name = Koce }` |
+| Rust     | `Greeting { msg_type: "greeting", name: "Koce" }` |
+
+For example:
 
 ```bash
 node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce" --broken
 ```
 
-In each case the bytes arrive over TCP, but the receiver cannot turn them back into data because each language's native representation is private to that language. Serialization to a shared format such as JSON is what makes them interoperable.
+The server's first line of reading is always meant to be a `Content-Type` header, so it sees this text instead and replies `protocol_error: Missing or unknown Content-Type header`. In each case the bytes arrive over TCP, but the receiver cannot turn them back into data because each language's native representation is private to that language. Serialization to a shared format, declared with a header, is what makes them interoperable.
 
 If you see `ECONNREFUSED` or `Connection refused`, the server is not running or the IP is wrong.
 
