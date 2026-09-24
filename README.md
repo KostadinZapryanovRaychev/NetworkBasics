@@ -205,3 +205,5 @@ python3 myproto/client.py --host 10.10.32.241 --port 5002 --name "Koce" --header
 - **Application layer:** `greeting` and `greeting_reply` define the meaning and behavior of the messages.
 
 The `--remove-presentation` option demonstrates the boundary: the application still creates a greeting, and TCP still connects, but the receiver cannot interpret the bytes. In a real internet deployment, replace `127.0.0.1` with the server device's reachable IP address, open the selected TCP port in its firewall, and consider TLS for encryption and authentication.
+
+node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce" --lie
