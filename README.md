@@ -89,14 +89,14 @@ python3 server.py --host 0.0.0.0 --port 5001
 
 Then run a client from the project folder (`NetworkBasics/`), replacing `10.10.32.241` with the server's IP.
 
-| Language | Needs        | Run from            | Command |
-| -------- | ------------ | -------------------- | --- |
-| Python   | Python 3     | project root          | `python3 client.py --host 10.10.32.241 --port 5001 --name "Koce"` |
-| Node.js  | Node.js      | project root          | `node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce"` |
-| Java     | JDK 11+      | project root          | `java java-client/Client.java --host 10.10.32.241 --port 5001 --name "Koce"` |
-| Go       | Go           | `go-client/`          | `go run main.go --host 10.10.32.241 --port 5001 --name "Koce"` |
-| C#       | .NET SDK     | `csharp-client/`      | `dotnet run -- --host 10.10.32.241 --port 5001 --name "Koce"` |
-| Rust     | Rust (cargo) | `rust-client/`        | `cargo run -- --host 10.10.32.241 --port 5001 --name "Koce"` |
+| Language | Needs        | Run from         | Command                                                                      |
+| -------- | ------------ | ---------------- | ---------------------------------------------------------------------------- |
+| Python   | Python 3     | project root     | `python3 client.py --host 10.10.32.241 --port 5001 --name "Koce"`            |
+| Node.js  | Node.js      | project root     | `node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce"`   |
+| Java     | JDK 11+      | project root     | `java java-client/Client.java --host 10.10.32.241 --port 5001 --name "Koce"` |
+| Go       | Go           | `go-client/`     | `go run main.go --host 10.10.32.241 --port 5001 --name "Koce"`               |
+| C#       | .NET SDK     | `csharp-client/` | `dotnet run -- --host 10.10.32.241 --port 5001 --name "Koce"`                |
+| Rust     | Rust (cargo) | `rust-client/`   | `cargo run -- --host 10.10.32.241 --port 5001 --name "Koce"`                 |
 
 Expected result for any of them: a `Content-Type: json` reply header, then a body such as `{"type": "greeting_reply", "message": "Hello, Koce!"}`.
 
@@ -112,14 +112,14 @@ java java-client/Client.java --host 10.10.32.241 --port 5001 --name "Koce" --for
 
 Add `--broken` to see the failure. Each language sends its own native representation instead of a header and body:
 
-| Language | `--broken` sends |
-| -------- | --- |
+| Language | `--broken` sends                                                                            |
+| -------- | ------------------------------------------------------------------------------------------- |
 | Python   | `{'type': 'greeting', 'name': 'Koce'}` (uses `--remove-presentation` instead of `--broken`) |
-| Node.js  | `[object Object]`, the plain object turned into text |
-| Java     | `Client$Greeting@5e5d171f`, the default `toString()` |
-| Go       | `{Type:greeting Name:Koce}` |
-| C#       | `Greeting { Type = greeting, Name = Koce }` |
-| Rust     | `Greeting { msg_type: "greeting", name: "Koce" }` |
+| Node.js  | `[object Object]`, the plain object turned into text                                        |
+| Java     | `Client$Greeting@5e5d171f`, the default `toString()`                                        |
+| Go       | `{Type:greeting Name:Koce}`                                                                 |
+| C#       | `Greeting { Type = greeting, Name = Koce }`                                                 |
+| Rust     | `Greeting { msg_type: "greeting", name: "Koce" }`                                           |
 
 For example:
 
