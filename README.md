@@ -27,14 +27,28 @@ python3 server.py
 python3 client.py --name Alice
 ```
 
-The default format is JSON. The client sends a `Content-Type` header before the body, and the server reads that header to know which format is coming, so the server does not need a matching `--format` flag or a restart. Leave the same server running and switch formats on the client alone:
+The default format is JSON. Every message, in both directions, has this layout:
+
+```text
+Content-Type: json
+Content-Length: 36
+<blank line>
+{"type": "greeting", "name": "Koce"}
+```
+
+- **Headers** are `Name: value` lines that describe the message. The blank line ends them. The server ignores headers it does not know, so new ones can be added later without breaking old clients.
+- **`Content-Type`** names the format, so the server does not need a matching `--format` flag or a restart.
+- **`Content-Length`** is the size of the body in **bytes** (not characters, so `Коце` counts 8). The receiver reads exactly that many bytes, which lets a body contain newlines and lets the receiver notice a truncated message.
+
+Leave the same server running and switch formats on the client alone:
 
 ```bash
 python3 client.py --format xml --name Alice
 python3 client.py --format csv --name Alice
+python3 client.py --format urlencoded --name Alice
 ```
 
-XML and CSV are presentation formats too; the application message remains the same greeting.
+XML, CSV and urlencoded (`type=greeting&name=Alice`, the same encoding HTML forms use) are presentation formats too; the application message remains the same greeting.
 
 For a Python-only experiment, use `--format pickle`:
 
@@ -48,6 +62,7 @@ Expected normal result:
 
 ```text
 NORMAL MODE: JSON presentation layer enabled
+Reply headers: {'content-type': 'json', 'content-length': '54'}
 Server reply: {'type': 'greeting_reply', 'message': 'Hello, Alice!'}
 ```
 
@@ -59,13 +74,15 @@ Leave the server running and execute:
 python3 client.py --name Alice --remove-presentation
 ```
 
-The client now sends this instead of a `Content-Type` header and a JSON body:
+The client now sends this instead of headers and a body:
 
 ```text
 {'type': 'greeting', 'name': 'Alice'}
 ```
 
-That is Python's `repr()` format, with no header in front of it. The server's first line of reading is always meant to be a header, so it sees this text where it expected `Content-Type: ...`, reports `PROTOCOL FAILURE`, and returns a `protocol_error` message. The application layer never gets a usable message. Because the server now reads the format from the header instead of a flag you set by hand, the server and client no longer need to be started with the same `--format`; only a missing or unrecognized header causes this failure.
+That is Python's `repr()` format, with no headers in front of it. The server always expects header lines first, and a header name may only contain letters, digits and `-`, so it rejects this line at once, reports `PROTOCOL FAILURE`, and returns a `protocol_error` reply (`Malformed message: Malformed header line: ...`). The application layer never gets a usable message. Because the server reads the format from the header instead of a flag you set by hand, the server and client no longer need to be started with the same `--format`; only broken framing, a missing or unrecognized `Content-Type`, or a body that does not match it causes a failure.
+
+The server also protects itself: it waits at most 10 seconds for a client, limits header size and body size (1 MB), and answers every malformed message with a `protocol_error` instead of crashing. Its error text describes the protocol problem, not Python's parser internals.
 
 ## Find the server's IP address
 
@@ -81,7 +98,7 @@ On Windows, Python is usually started with `python` or `py` instead of `python3`
 
 ## Clients in other languages
 
-Every client below does the same thing as `client.py`: it sends a `Content-Type` header and a greeting body to the Python server on port 5001, and takes `--format json` (default) or `--format urlencoded`. Each also has a `--broken` option that skips both the header and serialization. Start the server first on the server device:
+Every client below does the same thing as `client.py`: it sends `Content-Type` and `Content-Length` headers, a blank line and a greeting body to the Python server on port 5001, and takes `--format json` (default) or `--format urlencoded`. Each also has a `--broken` option that skips both the headers and serialization. Start the server first on the server device:
 
 ```bash
 python3 server.py --host 0.0.0.0 --port 5001
@@ -98,7 +115,7 @@ Then run a client from the project folder (`NetworkBasics/`), replacing `10.10.3
 | C#       | .NET SDK     | `csharp-client/` | `dotnet run -- --host 10.10.32.241 --port 5001 --name "Koce"`                |
 | Rust     | Rust (cargo) | `rust-client/`   | `cargo run -- --host 10.10.32.241 --port 5001 --name "Koce"`                 |
 
-Expected result for any of them: a `Content-Type: json` reply header, then a body such as `{"type": "greeting_reply", "message": "Hello, Koce!"}`.
+Expected result for any of them: the reply headers, then a body such as `{"type": "greeting_reply", "message": "Hello, Koce!"}`. Names with quotes or non-ASCII letters (for example `--name "Коце"`) work too, because each client escapes and counts bytes correctly.
 
 Add `--format urlencoded` to send `type=greeting&name=Koce` instead, on the same running server, no restart needed:
 
@@ -127,7 +144,7 @@ For example:
 node node-client/client.js --host 10.10.32.241 --port 5001 --name "Koce" --broken
 ```
 
-The server's first line of reading is always meant to be a `Content-Type` header, so it sees this text instead and replies `protocol_error: Missing or unknown Content-Type header`. In each case the bytes arrive over TCP, but the receiver cannot turn them back into data because each language's native representation is private to that language. Serialization to a shared format, declared with a header, is what makes them interoperable.
+The server expects header lines first, so it sees this text instead and replies `protocol_error: Malformed message: Malformed header line: ...`. In each case the bytes arrive over TCP, but the receiver cannot turn them back into data because each language's native representation is private to that language. Serialization to a shared format, declared with a header, is what makes them interoperable.
 
 If you see `ECONNREFUSED` or `Connection refused`, the server is not running or the IP is wrong.
 
