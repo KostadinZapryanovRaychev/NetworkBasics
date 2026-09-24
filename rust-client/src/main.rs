@@ -1,20 +1,40 @@
 // Tiny TCP client showing why a shared presentation format is needed.
 //
-// The Python server (server.py) reads a Content-Type header line before the
-// body, so the format can change per request without restarting the server.
-// Rust's own Debug representation of a struct is none of the formats it
-// understands, and skips the header entirely, so sending it "as is"
+// Every message is: headers (Name: value lines), a blank line, then exactly
+// Content-Length bytes of body. The Python server reads the Content-Type
+// header to pick the decoder, so the format can change per request without
+// restarting it. Rust's own Debug representation of a struct is none of the
+// formats it understands and has no headers, so sending it "as is"
 // demonstrates the same point as client.py's --remove-presentation flag,
 // but from Rust this time. No external crates: builds fully offline.
 
+use std::collections::HashMap;
 use std::env;
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpStream;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
 
 #[derive(Debug)]
 struct Greeting {
     msg_type: String,
     name: String,
+}
+
+fn json_string(value: &str) -> String {
+    let mut out = String::from("\"");
+    for c in value.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 fn form_urlencode(value: &str) -> String {
@@ -34,8 +54,9 @@ fn form_urlencode(value: &str) -> String {
 fn encode_body(format: &str, greeting: &Greeting) -> Result<String, String> {
     match format {
         "json" => Ok(format!(
-            "{{\"type\": \"{}\", \"name\": \"{}\"}}",
-            greeting.msg_type, greeting.name
+            "{{\"type\": {}, \"name\": {}}}",
+            json_string(&greeting.msg_type),
+            json_string(&greeting.name)
         )),
         "urlencoded" => Ok(format!(
             "type={}&name={}",
@@ -88,37 +109,64 @@ fn main() -> std::io::Result<()> {
         name: name.clone(),
     };
 
-    let wire_message: String = if broken {
-        // Deliberately skip both the header and serialization. This is
-        // Rust's internal Debug representation, not the shared wire format
-        // the server expects, and there is no Content-Type line either.
+    let wire_message: Vec<u8> = if broken {
+        // Deliberately skip the headers and serialization. This is Rust's
+        // internal Debug representation, not the shared wire format the
+        // server expects.
         println!("BROKEN MODE: presentation layer removed");
         let raw = format!("{:?}", greeting);
         println!("Sending raw Rust representation: {}", raw);
-        raw
+        format!("{}\n", raw).into_bytes()
     } else {
-        // Presentation layer: application data -> agreed wire format, with
-        // a Content-Type header so the server knows which one without
-        // being told in advance.
-        let body = encode_body(&format, &greeting).expect("encode_body failed");
+        // Presentation layer: application data -> agreed wire format. The
+        // header names the format and Content-Length counts BYTES (str::len
+        // is the UTF-8 byte length).
+        let body = encode_body(&format, &greeting).unwrap_or_else(|error| {
+            eprintln!("{}", error);
+            std::process::exit(1);
+        });
         println!("NORMAL MODE: {} presentation layer enabled", format.to_uppercase());
         println!("Sending body: {}", body);
-        format!("Content-Type: {}\n{}", format, body)
+        format!("Content-Type: {}\nContent-Length: {}\n\n{}", format, body.len(), body).into_bytes()
     };
 
-    let address = format!("{}:{}", host, port);
-    let mut stream = TcpStream::connect(&address)?;
-    stream.write_all(wire_message.as_bytes())?;
-    stream.write_all(b"\n")?;
+    let address = (host.as_str(), port)
+        .to_socket_addrs()?
+        .next()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "cannot resolve host"))?;
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(10))?;
+    stream.set_read_timeout(Some(Duration::from_secs(10)))?;
+    stream.write_all(&wire_message)?;
 
     let mut reader = BufReader::new(stream);
-    let mut reply_header = String::new();
-    reader.read_line(&mut reply_header)?;
-    println!("Reply header: {}", reply_header.trim_end());
+    let mut headers: HashMap<String, String> = HashMap::new();
+    loop {
+        let mut line = String::new();
+        let read = reader.read_line(&mut line)?;
+        let line = line.trim_end_matches(['\r', '\n']);
+        if line.is_empty() {
+            if read == 0 && headers.is_empty() {
+                println!("No reply from server.");
+                return Ok(());
+            }
+            break;
+        }
+        if let Some((key, value)) = line.split_once(':') {
+            headers.insert(key.trim().to_lowercase(), value.trim().to_string());
+        }
+    }
 
-    let mut reply_body = String::new();
-    reader.read_line(&mut reply_body)?;
-    println!("Reply body: {}", reply_body.trim_end());
+    let length: usize = match headers.get("content-length").and_then(|v| v.parse().ok()) {
+        Some(length) => length,
+        None => {
+            println!("Reply has no valid Content-Length");
+            return Ok(());
+        }
+    };
+    let mut reply_body = vec![0u8; length];
+    reader.read_exact(&mut reply_body)?;
+    println!("Reply headers: {:?}", headers);
+    println!("Reply body: {}", String::from_utf8_lossy(&reply_body));
 
     Ok(())
 }

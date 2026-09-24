@@ -1,31 +1,38 @@
 // Tiny TCP client showing why a shared presentation format is needed.
 //
-// The Python server (server.py) reads a Content-Type header line before the
-// body, so the format can change per request without restarting the server.
-// Go's default %+v struct dump is none of the formats it understands, and
-// skips the header entirely, so sending it "as is" demonstrates the same
-// point as client.py's --remove-presentation flag. No dependencies:
+// Every message is: headers (Name: value lines), a blank line, then exactly
+// Content-Length bytes of body. The Python server reads the Content-Type
+// header to pick the decoder, so the format can change per request without
+// restarting it. Go's default %+v struct dump is none of the formats it
+// understands and has no headers, so sending it "as is" demonstrates the
+// same point as client.py's --remove-presentation flag. No dependencies:
 // standard library only.
 
 package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
+	"strconv"
+	"strings"
+	"time"
 )
 
 type Greeting struct {
-	Type string
-	Name string
+	Type string `json:"type"`
+	Name string `json:"name"`
 }
 
 func encodeBody(format string, greeting Greeting) (string, error) {
 	switch format {
 	case "json":
-		return fmt.Sprintf(`{"type": "%s", "name": "%s"}`, greeting.Type, greeting.Name), nil
+		data, err := json.Marshal(greeting)
+		return string(data), err
 	case "urlencoded":
 		values := url.Values{}
 		values.Set("type", greeting.Type)
@@ -41,59 +48,75 @@ func main() {
 	port := flag.Int("port", 5001, "server port")
 	name := flag.String("name", "Student", "greeting name")
 	format := flag.String("format", "json", "presentation format: json or urlencoded")
-	broken := flag.Bool("broken", false, "send Go's native struct dump instead of a header and body")
+	broken := flag.Bool("broken", false, "send Go's native struct dump instead of headers and a body")
 	flag.Parse()
 
 	greeting := Greeting{Type: "greeting", Name: *name}
 
 	var wireMessage string
 	if *broken {
-		// Deliberately skip both the header and serialization. This is Go's
+		// Deliberately skip the headers and serialization. This is Go's
 		// internal struct representation, not the shared wire format the
-		// server expects, and there is no Content-Type line either.
+		// server expects.
 		raw := fmt.Sprintf("%+v", greeting)
 		fmt.Println("BROKEN MODE: presentation layer removed")
 		fmt.Println("Sending raw Go representation:", raw)
 		wireMessage = raw + "\n"
 	} else {
-		// Presentation layer: application data -> agreed wire format, with
-		// a Content-Type header so the server knows which one without
-		// being told in advance.
+		// Presentation layer: application data -> agreed wire format. The
+		// header names the format and Content-Length counts BYTES (len of
+		// a Go string is its byte length).
 		body, err := encodeBody(*format, greeting)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		fmt.Println("NORMAL MODE:", *format, "presentation layer enabled")
+		fmt.Println("NORMAL MODE:", strings.ToUpper(*format), "presentation layer enabled")
 		fmt.Println("Sending body:", body)
-		wireMessage = "Content-Type: " + *format + "\n" + body + "\n"
+		wireMessage = fmt.Sprintf("Content-Type: %s\nContent-Length: %d\n\n%s", *format, len(body), body)
 	}
 
-	address := fmt.Sprintf("%s:%d", *host, *port)
-	conn, err := net.Dial("tcp", address)
+	address := net.JoinHostPort(*host, strconv.Itoa(*port))
+	conn, err := net.DialTimeout("tcp", address, 10*time.Second)
 	if err != nil {
 		fmt.Println("Connection error:", err)
 		return
 	}
 	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
 
-	_, err = conn.Write([]byte(wireMessage))
-	if err != nil {
+	if _, err = conn.Write([]byte(wireMessage)); err != nil {
 		fmt.Println("Write error:", err)
 		return
 	}
 
 	reader := bufio.NewReader(conn)
-	replyHeader, err := reader.ReadString('\n')
-	if err != nil && replyHeader == "" {
-		fmt.Println("No reply from server.")
+	headers := map[string]string{}
+	for {
+		line, err := reader.ReadString('\n')
+		line = strings.TrimRight(line, "\r\n")
+		if line == "" {
+			if err != nil && len(headers) == 0 {
+				fmt.Println("No reply from server.")
+				return
+			}
+			break
+		}
+		if name, value, ok := strings.Cut(line, ":"); ok {
+			headers[strings.ToLower(strings.TrimSpace(name))] = strings.TrimSpace(value)
+		}
+	}
+
+	length, err := strconv.Atoi(headers["content-length"])
+	if err != nil {
+		fmt.Println("Reply has no valid Content-Length")
 		return
 	}
-	fmt.Println("Reply header:", replyHeader[:len(replyHeader)-1])
-
-	replyBody, err := reader.ReadString('\n')
-	if err == nil {
-		replyBody = replyBody[:len(replyBody)-1]
+	replyBody := make([]byte, length)
+	if _, err := io.ReadFull(reader, replyBody); err != nil {
+		fmt.Println("Reply body was cut short:", err)
+		return
 	}
-	fmt.Println("Reply body:", replyBody)
+	fmt.Println("Reply headers:", headers)
+	fmt.Println("Reply body:", string(replyBody))
 }
