@@ -3,7 +3,7 @@
 import argparse
 import socket
 
-from protocol import FORMATS, decode, encode
+from protocol import FORMATS, FramingError, decode, read_message, write_message
 
 
 def application_message(name):
@@ -15,28 +15,30 @@ def main(host, port, name, format_name, remove_presentation):
     message = application_message(name)
 
     if remove_presentation:
-        # Deliberately skip JSON. This is Python's internal representation,
-        # not the shared wire format expected by the server.
+        # Deliberately skip the headers and serialization. This is Python's
+        # internal representation, not the shared wire format the server expects.
         wire_message = (repr(message) + "\n").encode("utf-8")
         print("BROKEN MODE: presentation layer removed")
     else:
-        body = encode(message, format_name)
-        # Header: the client states what it sent, instead of both sides
-        # having to be started with the same --format by hand.
-        header = "Content-Type: {}\n".format(format_name).encode("utf-8")
-        wire_message = header + body
+        wire_message = write_message(format_name, message)
         print("NORMAL MODE: {} presentation layer enabled".format(format_name.upper()))
 
-    with socket.create_connection((host, port)) as connection:
+    with socket.create_connection((host, port), timeout=10) as connection:
         connection.sendall(wire_message)
-        stream = connection.makefile("rb")
-        reply_header = stream.readline().decode("utf-8").strip()
-        reply_line = stream.readline()
+        try:
+            received = read_message(connection.makefile("rb"))
+        except FramingError as error:
+            print("CLIENT FRAMING FAILURE:", error)
+            return
 
-    reply_format = reply_header.split(":", 1)[1].strip() if ":" in reply_header else format_name
+    if received is None:
+        print("No reply from server.")
+        return
+
+    headers, body = received
+    print("Reply headers:", headers)
     try:
-        reply = decode(reply_line, reply_format)
-        print("Server reply:", reply)
+        print("Server reply:", decode(body, headers.get("content-type", "")))
     except (UnicodeDecodeError, ValueError) as error:
         print("CLIENT PRESENTATION FAILURE:", error)
 
