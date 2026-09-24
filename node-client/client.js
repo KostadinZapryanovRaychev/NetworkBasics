@@ -17,6 +17,7 @@ function parseArgs(argv) {
     name: "Student",
     format: "json",
     broken: false,
+    lie: false,
   };
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
@@ -35,6 +36,9 @@ function parseArgs(argv) {
       case "--broken":
         options.broken = true;
         break;
+      case "--lie":
+        options.lie = true;
+        break;
     }
   }
   return options;
@@ -50,7 +54,7 @@ function encodeBody(format, greeting) {
   throw new Error("Unsupported format: " + format);
 }
 
-const { host, port, name, format, broken } = parseArgs(process.argv.slice(2));
+const { host, port, name, format, broken, lie } = parseArgs(process.argv.slice(2));
 
 const greeting = { type: "greeting", name };
 
@@ -69,9 +73,15 @@ if (broken) {
   // Presentation layer: application data -> agreed wire format. The header
   // names the format and Content-Length counts BYTES, not characters.
   const body = Buffer.from(encodeBody(format, greeting), "utf8");
-  const head = `Content-Type: ${format}\nContent-Length: ${body.length}\n\n`;
+  // --lie: the framing is valid, but the header names a different format
+  // than the body really is, so the server's decoder rejects the body.
+  const declaredFormat = lie ? "xml" : format;
+  const head = `Content-Type: ${declaredFormat}\nContent-Length: ${body.length}\n\n`;
   console.log("NORMAL MODE: " + format.toUpperCase() + " presentation layer enabled");
   console.log("Sending body:", body.toString("utf8"));
+  if (lie) {
+    console.log("LYING: body is " + format + " but Content-Type says " + declaredFormat);
+  }
   wireMessage = Buffer.concat([Buffer.from(head, "utf8"), body]);
 }
 
