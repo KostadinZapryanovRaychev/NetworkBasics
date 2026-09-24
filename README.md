@@ -84,6 +84,25 @@ That is Python's `repr()` format, with no headers in front of it. The server alw
 
 The server also protects itself: it waits at most 10 seconds for a client, limits header size and body size (1 MB), and answers every malformed message with a `protocol_error` instead of crashing. Its error text describes the protocol problem, not Python's parser internals.
 
+## Send an unknown format
+
+The clients only offer formats the server knows, so to see the server reject an unknown protocol, send the bytes by hand with `nc` (netcat, available on macOS and Linux). This declares a `yaml` body, which the server does not support:
+
+```bash
+printf 'Content-Type: yaml\nContent-Length: 2\n\n{}' | nc 127.0.0.1 5001
+```
+
+The framing is valid (headers, blank line, 2 bytes of body), but the server has no decoder for `yaml`, so it replies:
+
+```text
+Content-Type: json
+Content-Length: 87
+
+{"type": "protocol_error", "message": "Missing or unknown Content-Type header: 'yaml'"}
+```
+
+Replace `127.0.0.1` with the server's IP to test from another device. The known formats are `json`, `xml`, `csv`, `urlencoded` and `pickle`.
+
 ## Find the server's IP address
 
 Run one of these **on the server device** (the one running `server.py`) and use the result as `--host` in the clients. Look for a private address such as `192.168.x.x`, `10.x.x.x` or `172.16.x.x`-`172.31.x.x`. A public address will not work on the classroom network.
