@@ -2,13 +2,16 @@
 
 import argparse
 import socket
+import pickle
 import threading
+import xml.etree.ElementTree as ET
 
-from protocol import FORMATS, decode, encode
+from protocol import FORMATS, FramingError, decode, read_message, write_message
 from ip import get_local_ip
 
 HOST = get_local_ip()
 PORT = 5001
+CLIENT_TIMEOUT_SECONDS = 10
 
 
 def application_handle(message):
@@ -23,33 +26,50 @@ def application_handle(message):
     }
 
 
-def handle_client(connection, address, format_name):
+def reply_error(connection, message):
+    print("PROTOCOL FAILURE:", message)
+    connection.sendall(write_message("json", {"type": "protocol_error", "message": message}))
+
+
+def handle_client(connection, address):
     with connection:
+        connection.settimeout(CLIENT_TIMEOUT_SECONDS)
         print("Connected without authentication:", address)
-        received = connection.makefile("rb").readline()
-        if not received:
-            return
-
         try:
-            message = decode(received, format_name)
-            print("Presentation decoded:", message)
-            reply = application_handle(message)
-            connection.sendall(encode(reply, format_name))
+            received = read_message(connection.makefile("rb"))
+            if received is None:
+                return
+            headers, body = received
+
+            format_name = headers.get("content-type", "")
+            if format_name not in FORMATS:
+                reply_error(connection, "Missing or unknown Content-Type header: {!r}".format(format_name[:40]))
+                return
+
+            try:
+                message = decode(body, format_name)
+                print("Presentation decoded:", message)
+                reply = application_handle(message)
+            except (UnicodeDecodeError, ValueError, AttributeError, TypeError, ET.ParseError, pickle.UnpicklingError) as error:
+                # Log the parser's own wording locally; clients only get a
+                # protocol-level message that does not depend on Python.
+                print("Decode detail:", error)
+                reply_error(connection, "Body does not match declared Content-Type: {}".format(format_name))
+                return
+
+            connection.sendall(write_message(format_name, reply))
             print("Application reply sent to", address, ":", reply)
-        except (UnicodeDecodeError, ValueError, AttributeError) as error:
-            error_message = {
-                "type": "protocol_error",
-                "message": "Presentation layer could not decode the message: {}".format(error),
-            }
-            print("PROTOCOL FAILURE:", error_message["message"])
-            connection.sendall(encode(error_message, format_name))
+        except FramingError as error:
+            reply_error(connection, "Malformed message: {}".format(error))
+        except (socket.timeout, ConnectionError) as error:
+            print("Connection problem with", address, ":", error)
 
 
-def serve(host, port, format_name):
+def serve(host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((host, port))
-        server_socket.listen(1)
+        server_socket.listen(50)
         print("Listening on {}:{}".format(host, port))
         print("WARNING: no authentication, no encryption, and no access control")
 
@@ -57,7 +77,7 @@ def serve(host, port, format_name):
             connection, address = server_socket.accept()
             threading.Thread(
                 target=handle_client,
-                args=(connection, address, format_name),
+                args=(connection, address),
                 daemon=True,
             ).start()
 
@@ -66,7 +86,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Application/presentation layer demo server")
     parser.add_argument("--host", default=HOST, help="Leave empty for current local ip")
     parser.add_argument("--port", type=int, default=PORT, help="Leave empty for 5001")
-    parser.add_argument("--format", choices=FORMATS, default="json")
     arguments = parser.parse_args()
-    print("Presentation format:", arguments.format)
-    serve(arguments.host, arguments.port, arguments.format)
+    print("Each message: headers, blank line, then Content-Length bytes of body")
+    serve(arguments.host, arguments.port)
