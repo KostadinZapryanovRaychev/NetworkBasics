@@ -21,3 +21,32 @@ https://networkbasics.onrender.com/
 Swagger
 
 https://networkbasics.onrender.com/docs
+
+## Your first Postman request
+
+1. Open Postman, click **New → HTTP Request**.
+2. Set the method to **POST**.
+3. URL:
+   ```
+   https://networkbasics.onrender.com/students
+   ```
+4. Go to the **Body** tab, select **raw**, and change the type dropdown (right side) from `Text` to **JSON**.
+5. Paste:
+   ```json
+   {
+     "name": "Koce",
+     "email": "koce@example.com",
+     "grade": "A"
+   }
+   ```
+6. Click **Send**. You should get back **201 Created** with the same object, now including an `id`:
+   ```json
+   {
+     "id": 1,
+     "name": "Koce",
+     "email": "koce@example.com",
+     "grade": "A"
+   }
+   ```
+
+Then try **GET** `https://networkbasics.onrender.com/students` (no body needed) to see it in the list.
