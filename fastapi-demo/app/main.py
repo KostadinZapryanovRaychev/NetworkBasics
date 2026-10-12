@@ -47,6 +47,15 @@ def create_student(payload: schemas.StudentCreate, db: Session = Depends(get_db)
     db.refresh(student)
     return student
 
+#wrong arthitecture style
+@app.post("/students-create", response_model=schemas.StudentOut, status_code=201, tags=["students"])
+def create_student(payload: schemas.StudentCreate, db: Session = Depends(get_db)):
+    student = models.Student(**payload.model_dump())
+    db.add(student)
+    db.commit()
+    db.refresh(student)
+    return student
+
 
 @app.put("/students/{student_id}", response_model=schemas.StudentOut, tags=["students"])
 def replace_student(student_id: int, payload: schemas.StudentUpdate, db: Session = Depends(get_db)):
