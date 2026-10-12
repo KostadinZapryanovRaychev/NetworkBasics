@@ -14,14 +14,10 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Open **http://127.0.0.1:8000/docs**.
+Main url
 
-No database setup needed to try it — it uses a local SQLite file by default.
+https://networkbasics.onrender.com/
 
-## Database
+Swagger
 
-For the real demo, free Postgres: **[neon.tech](https://neon.tech)** — sign up,
-create a project, copy the connection string it gives you.
-
-Once you have it, send me the URL and I'll wire it up — set it as
-`DATABASE_URL` and the app uses Postgres instead of SQLite, no code changes.
+https://networkbasics.onrender.com/docs
