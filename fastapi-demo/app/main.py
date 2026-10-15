@@ -31,6 +31,13 @@ def list_students(db: Session = Depends(get_db)):
     return db.query(models.Student).all()
 
 
+@app.get("/grades", response_model=list[str], tags=["students"])
+def list_grades(db: Session = Depends(get_db)):
+    """Just the distinct grades in use, e.g. ["A", "B"] - no student details."""
+    rows = db.query(models.Student.grade).distinct().all()
+    return [row[0] for row in rows]
+
+
 @app.get("/students/{student_id}", response_model=schemas.StudentOut, tags=["students"])
 def get_student(student_id: int, db: Session = Depends(get_db)):
     student = db.get(models.Student, student_id)
