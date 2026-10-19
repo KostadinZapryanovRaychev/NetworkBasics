@@ -1,7 +1,8 @@
 # Students API
 
 A tiny FastAPI app: one `students` resource, one route per HTTP method
-(GET, POST, PUT, PATCH, DELETE). No auth — just hit it from Postman.
+(GET, POST, PUT, PATCH, DELETE). Reads (GET) are open; writes (POST, PUT,
+PATCH, DELETE) require an API key — see [Authentication](#authentication) below.
 
 Swagger UI is automatic, no setup needed.
 
@@ -30,8 +31,12 @@ https://networkbasics.onrender.com/docs
    ```
    https://networkbasics.onrender.com/students
    ```
-4. Go to the **Body** tab, select **raw**, and change the type dropdown (right side) from `Text` to **JSON**.
-5. Paste:
+4. Go to the **Headers** tab and add:
+   | Key | Value |
+   |---|---|
+   | `X-API-Key` | *(see [Authentication](#authentication) below for where to get this)* |
+5. Go to the **Body** tab, select **raw**, and change the type dropdown (right side) from `Text` to **JSON**.
+6. Paste:
    ```json
    {
      "name": "Koce",
@@ -39,7 +44,7 @@ https://networkbasics.onrender.com/docs
      "grade": "A"
    }
    ```
-6. Click **Send**. You should get back **201 Created** with the same object, now including an `id`:
+7. Click **Send**. You should get back **201 Created** with the same object, now including an `id`:
    ```json
    {
      "id": 1,
@@ -49,4 +54,47 @@ https://networkbasics.onrender.com/docs
    }
    ```
 
-Then try **GET** `https://networkbasics.onrender.com/students` (no body needed) to see it in the list.
+Then try **GET** `https://networkbasics.onrender.com/students` (no headers or body needed) to see it in the list.
+
+Skip step 4 (no `X-API-Key` header) and this POST comes back as **401 Unauthorized** instead.
+
+## Authentication
+
+`GET` requests (`/students`, `/students/{id}`, `/grades`) need nothing. Every
+write (`POST`, `PUT`, `PATCH`, `DELETE`) requires an `X-API-Key` header
+matching the server's `API_KEY` environment variable.
+
+**Generate a key** (or just make one up for a class demo):
+
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+**Set it** in `fastapi-demo/.env`:
+
+```
+API_KEY=paste-the-generated-value-here
+```
+
+(and as an environment variable on Render too, the same way `DATABASE_URL` is set there.)
+
+**Use it in Postman:** on any write request, open the **Headers** tab and add:
+
+| Key         | Value                           |
+| ----------- | ------------------------------- |
+| `X-API-Key` | _(the same value as `API_KEY`)_ |
+
+**Use it in Swagger (`/docs`):** click the **Authorize** button (top right,
+padlock icon), paste the key, click **Authorize**. Every write request sent
+from Swagger after that includes the header automatically.
+
+**Use it with curl:**
+
+```bash
+curl -X POST https://networkbasics.onrender.com/students \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-key-here" \
+  -d '{"name": "Koce", "email": "koce@example.com", "grade": "A"}'
+```
+
+Missing or wrong key → `401 Unauthorized`.
